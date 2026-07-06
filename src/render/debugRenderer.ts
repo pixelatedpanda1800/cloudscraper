@@ -9,6 +9,38 @@ const FLOOR_H = 22;
 const SCALE_X = 4.2;
 const MARGIN = 20;
 
+/** Selection state consumed by render(); owned by the UI layer. */
+export interface Selection {
+  agentId: number | null;
+  shaftId: number | null;
+}
+
+/** Canvas-pixel → sim coordinate helpers for hit-testing. */
+export function pickAgent(state: SimState, canvasH: number, px: number, py: number): number | null {
+  const floorY = (f: number) => canvasH - MARGIN - (f + 1) * FLOOR_H;
+  let best: number | null = null;
+  let bestD = 8; // px tolerance
+  for (const a of state.agents) {
+    if (a.activity === 'offsite' || a.activity === 'riding') continue;
+    const ax = MARGIN + a.x * SCALE_X;
+    const ay = floorY(a.floor) + FLOOR_H - 5;
+    const d = Math.abs(ax - px) + Math.abs(ay - py);
+    if (d < bestD) {
+      bestD = d;
+      best = a.id;
+    }
+  }
+  return best;
+}
+
+export function pickShaft(state: SimState, px: number): number | null {
+  for (const shaft of state.shafts) {
+    const x = MARGIN + shaft.x * SCALE_X - 2;
+    if (px >= x - 16 && px <= x + 5 * SCALE_X * 0.6 + 4) return shaft.id;
+  }
+  return null;
+}
+
 function stressColor(stress: number): string {
   if (stress < 34) return '#8fd18f';
   if (stress < 67) return '#e88bc4';
@@ -20,7 +52,11 @@ export function sizeCanvas(canvas: HTMLCanvasElement, state: SimState): void {
   canvas.height = state.floors * FLOOR_H + MARGIN * 2;
 }
 
-export function render(ctx: CanvasRenderingContext2D, state: SimState): void {
+export function render(
+  ctx: CanvasRenderingContext2D,
+  state: SimState,
+  sel: Selection = { agentId: null, shaftId: null },
+): void {
   const H = ctx.canvas.height;
   ctx.clearRect(0, 0, ctx.canvas.width, H);
 
@@ -57,7 +93,7 @@ export function render(ctx: CanvasRenderingContext2D, state: SimState): void {
     const botY = floorY(shaft.lowFloor) + FLOOR_H;
     ctx.fillStyle = '#151a24';
     ctx.fillRect(x, topY, 5 * SCALE_X * 0.6, botY - topY);
-    ctx.strokeStyle = '#4a5570';
+    ctx.strokeStyle = shaft.id === sel.shaftId ? '#e8c860' : '#4a5570';
     ctx.strokeRect(x + 0.5, topY + 0.5, 5 * SCALE_X * 0.6 - 1, botY - topY - 1);
 
     // Cars
@@ -91,6 +127,20 @@ export function render(ctx: CanvasRenderingContext2D, state: SimState): void {
     ctx.fillStyle = stressColor(a.stress);
     const y = floorY(a.floor) + FLOOR_H - 7;
     ctx.fillRect(tx(a.x), y, 3, 5);
+  }
+
+  // Selected agent: ring highlight (even while riding — follows the car)
+  if (sel.agentId !== null) {
+    const a = state.agents[sel.agentId];
+    if (a.activity !== 'offsite') {
+      const y = floorY(a.floor) + FLOOR_H - 5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(tx(a.x) + 1.5, y, 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
   }
 }
 

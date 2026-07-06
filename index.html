@@ -8,13 +8,24 @@
       #hud { padding: 8px 12px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
       #hud button { background: #262a35; color: #cfd3dc; border: 1px solid #3a4050; padding: 3px 10px; cursor: pointer; font: inherit; }
       #hud button.active { background: #3d72d9; color: #fff; border-color: #3d72d9; }
-      #wrap { overflow: auto; padding: 0 12px 12px; }
-      canvas { background: #0c0e12; display: block; image-rendering: pixelated; }
+      #row { display: flex; gap: 12px; padding: 0 12px 12px; align-items: flex-start; }
+      #wrap { overflow: auto; }
+      canvas { background: #0c0e12; display: block; image-rendering: pixelated; cursor: crosshair; }
+      #panel { min-width: 230px; max-width: 280px; background: #191d27; border: 1px solid #2a3040; padding: 10px 12px; }
+      #panel h3 { margin: 0 0 6px; font-size: 12px; color: #8fa3c8; text-transform: uppercase; letter-spacing: 1px; }
+      #panel .kv { display: flex; justify-content: space-between; gap: 8px; }
+      #panel .kv span:first-child { color: #7f8aa3; }
+      #panel button { margin: 6px 4px 0 0; background: #262a35; color: #cfd3dc; border: 1px solid #3a4050; padding: 3px 8px; cursor: pointer; font: inherit; }
+      #panel button:disabled { opacity: 0.4; cursor: default; }
+      #panel .hint { color: #5b6478; margin-top: 8px; }
     </style>
   </head>
   <body>
     <div id="hud"></div>
-    <div id="wrap"><canvas id="view"></canvas></div>
+    <div id="row">
+      <div id="wrap"><canvas id="view"></canvas></div>
+      <div id="panel"></div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

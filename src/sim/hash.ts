@@ -30,7 +30,11 @@ export function hashState(state: SimState): number {
     mix(a.activity.length); // cheap enum discriminator
     mix(a.intent.length);
   }
+  mix(state.shafts.length);
   for (const s of state.shafts) {
+    mix(s.id);
+    mix(s.x);
+    mix(s.cars.length);
     for (const car of s.cars) {
       mix(car.pos);
       mix(car.target);

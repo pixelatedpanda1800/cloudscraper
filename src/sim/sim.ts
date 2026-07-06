@@ -1,11 +1,15 @@
 import { tickAgent } from './agents';
 import { tickOfDay } from './clock';
 import { tickShaft } from './elevator';
+import { applyAction } from './actions';
+import type { LoggedAction } from './actions';
 import type { SimState } from './types';
 
 export { buildScenario } from './tower';
 export { hashState } from './hash';
 export { clockOf } from './clock';
+export { applyAction };
+export type { Action, LoggedAction } from './actions';
 export type { SimState, Agent, ElevatorShaft } from './types';
 
 /** Advance the simulation exactly one tick. Fixed iteration order (agents by
@@ -41,4 +45,17 @@ export function tick(state: SimState): void {
 /** Run N ticks (test/bench helper). */
 export function run(state: SimState, ticks: number): void {
   for (let i = 0; i < ticks; i++) tick(state);
+}
+
+/** Replay helper: run to `untilTick`, applying logged actions at their ticks.
+ *  This is the reconstruction path for snapshot + action-log saves. */
+export function runWithLog(state: SimState, log: LoggedAction[], untilTick: number): void {
+  let li = 0;
+  while (state.tick < untilTick) {
+    while (li < log.length && log[li].tick === state.tick) {
+      applyAction(state, log[li].action);
+      li++;
+    }
+    tick(state);
+  }
 }
