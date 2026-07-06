@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CloudScraper — M0 Debug Sim</title>
+    <style>
+      body { margin: 0; background: #14161c; color: #cfd3dc; font: 13px/1.4 ui-monospace, Menlo, monospace; }
+      #hud { padding: 8px 12px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+      #hud button { background: #262a35; color: #cfd3dc; border: 1px solid #3a4050; padding: 3px 10px; cursor: pointer; font: inherit; }
+      #hud button.active { background: #3d72d9; color: #fff; border-color: #3d72d9; }
+      #wrap { overflow: auto; padding: 0 12px 12px; }
+      canvas { background: #0c0e12; display: block; image-rendering: pixelated; }
+    </style>
+  </head>
+  <body>
+    <div id="hud"></div>
+    <div id="wrap"><canvas id="view"></canvas></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
