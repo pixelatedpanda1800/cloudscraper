@@ -101,6 +101,8 @@ function openDoorsAt(state: SimState, shaft: ElevatorShaft, car: ElevatorCar, fl
       agent.activity = 'riding';
       state.stats.boardedToday++;
       state.stats.totalWaitTicksToday += agent.waitTicks;
+      shaft.boardedToday++;
+      shaft.waitTicksToday += agent.waitTicks;
       // Complaint evidence (GDD §5): remember the worst wait — where and when.
       if (agent.waitTicks > agent.worstWaitTicks) {
         agent.worstWaitTicks = agent.waitTicks;

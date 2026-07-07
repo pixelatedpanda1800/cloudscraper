@@ -16,7 +16,7 @@ import type { SimState } from './types';
 export { buildScenario, facilityById } from './tower';
 export { hashState } from './hash';
 export { clockOf } from './clock';
-export { unitComplaint, updateStar } from './economy';
+export { unitComplaint, unitComplaints, updateStar } from './economy';
 export type { UnitComplaint } from './economy';
 export { applyAction };
 export type { Action, LoggedAction } from './actions';
@@ -31,6 +31,10 @@ export function tick(state: SimState): void {
     state.stats.boardedToday = 0;
     state.stats.totalWaitTicksToday = 0;
     state.stats.maxQueueToday = 0;
+    for (const shaft of state.shafts) {
+      shaft.boardedToday = 0;
+      shaft.waitTicksToday = 0;
+    }
     // Midnight economy events, in a fixed order (determinism): satisfaction
     // digests the day's stress before quarterly consequences read it; sales
     // close; vacancies re-let; the star gate re-checks population. Quarter

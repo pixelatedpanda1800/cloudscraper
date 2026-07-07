@@ -120,6 +120,8 @@ export function applyAction(state: SimState, action: Action): boolean {
         service: !!action.service,
         builtTick: state.tick,
         cost: SHAFT_COST,
+        boardedToday: 0,
+        waitTicksToday: 0,
         queueUp,
         queueDown,
       });

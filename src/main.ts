@@ -1,4 +1,4 @@
-import { applyAction, buildScenario, facilityById, tick, unitComplaint } from './sim/sim';
+import { applyAction, buildScenario, facilityById, tick, unitComplaints } from './sim/sim';
 import type { Action, LoggedAction } from './sim/sim';
 import { CATALOG, tracksSatisfaction } from './sim/catalog';
 import {
@@ -175,22 +175,69 @@ function kv(label: string, value: string): string {
   return `<div class="kv"><span>${label}</span><span>${value}</span></div>`;
 }
 
+/** Deep-link helpers: complaints and route lines jump to their culprit. */
+function selectShaft(id: number): void {
+  sel.agentId = null;
+  sel.facilityId = null;
+  sel.shaftId = id;
+  renderPanel();
+}
+function selectFacility(id: number): void {
+  sel.agentId = null;
+  sel.shaftId = null;
+  sel.facilityId = id;
+  renderPanel();
+}
+function jumpButton(label: string, onClick: () => void): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.onclick = onClick;
+  return b;
+}
+
 function renderPanel(): void {
   if (sel.agentId !== null) {
     const a = state.agents[sel.agentId];
-    const office = facilityById(state, a.homeFacilityId);
+    const home = facilityById(state, a.homeFacilityId);
+    // Current trip, spelled out leg by leg (the drawn route mirrors this).
+    let trip = '—';
+    if (a.activity !== 'offsite' && a.activity !== 'settled') {
+      const goal = `${a.intent !== 'none' ? a.intent : 'trip'} → F${a.destFloor}`;
+      const via =
+        a.legVia === 'shaft'
+          ? ` via shaft #${a.legViaId} to F${a.legFloor}`
+          : a.legVia === 'stair'
+            ? ` via stairs to F${a.legFloor}`
+            : '';
+      trip = goal + via;
+    }
     panel.innerHTML =
       `<h3>Person #${a.id}</h3>` +
-      kv('Doing', a.activity + (a.intent !== 'none' ? ` → ${a.intent}` : '')) +
+      kv('Doing', a.activity) +
+      kv('Trip', trip) +
       kv('Floor', String(a.floor)) +
-      kv('Stress', `${a.stress.toFixed(1)} / 100`) +
+      kv('Stress', `${a.stress.toFixed(1)} / 100 (peak today ${a.peakStressToday.toFixed(0)})`) +
+      kv(
+        'From',
+        `waits ${a.stressWaitToday.toFixed(1)} · noise ${a.stressNoiseToday.toFixed(1)} · stairs ${a.stressClimbToday.toFixed(1)}`,
+      ) +
       kv('Waiting', a.activity === 'queuing' ? `${(a.waitTicks / TICKS_PER_SECOND).toFixed(0)}s` : '—') +
       kv('Role', a.role) +
-      kv('Home', office ? `${office.kind}, floor ${office.floor}` : 'demolished — departed') +
+      kv('Home', home ? `${home.kind}, floor ${home.floor}` : 'demolished — departed') +
       kv('Arrives', fmtTod(a.arriveTick)) +
       kv('Lunch', fmtTod(a.lunchTick)) +
-      kv('Leaves', fmtTod(a.leaveTick)) +
-      `<div class="hint">Click empty space to deselect.</div>`;
+      kv('Leaves', fmtTod(a.leaveTick));
+    if (home) panel.append(jumpButton('→ home unit', () => selectFacility(home.id)));
+    const rideShaft = a.shaftId >= 0 ? a.shaftId : a.legVia === 'shaft' ? a.legViaId : -1;
+    if (rideShaft >= 0) panel.append(jumpButton(`→ shaft #${rideShaft}`, () => selectShaft(rideShaft)));
+    if (a.worstWaitShaftId >= 0) {
+      panel.append(
+        jumpButton(
+          `→ worst wait (${Math.round(a.worstWaitTicks / TICKS_PER_SECOND)}s, shaft #${a.worstWaitShaftId})`,
+          () => selectShaft(a.worstWaitShaftId),
+        ),
+      );
+    }
     return;
   }
 
@@ -203,20 +250,35 @@ function renderPanel(): void {
       `<h3>${f.kind} (floor ${f.floor})</h3>` +
       kv('Tenants', f.vacant ? 'vacant' : `${tenants}`) +
       kv('Noise', f.noise > 0 ? `${f.noise} (stressing residents)` : '—');
+    if (tracksSatisfaction(def)) html += kv('Satisfaction', `${f.satisfaction.toFixed(0)} / 100`);
+    if (f.kind === 'hotel') html += kv('Room', f.dirty ? 'dirty — needs housekeeping' : 'clean');
+    panel.innerHTML = html;
     if (tracksSatisfaction(def)) {
-      html += kv('Satisfaction', `${f.satisfaction.toFixed(0)} / 100`);
-      const c = unitComplaint(state, f.id);
-      if (c) {
-        html +=
-          c.cause === 'elevator waits'
-            ? kv('Complaint', `waits ~${c.waitSec}s at shaft #${c.shaftId}, F${c.floor}, ${c.bucket}`)
-            : kv('Complaint', c.cause);
-      } else {
-        html += kv('Complaint', 'none');
+      // Top complaints, each deep-linking to its culprit (GDD §5 Inspector).
+      const complaints = unitComplaints(state, f.id).slice(0, 3);
+      if (complaints.length === 0) {
+        panel.insertAdjacentHTML('beforeend', kv('Complaints', 'none'));
+      }
+      for (const c of complaints) {
+        if (c.cause === 'elevator waits' && c.shaftId !== undefined) {
+          panel.append(
+            jumpButton(`waits ~${c.waitSec}s at shaft #${c.shaftId}, F${c.floor}, ${c.bucket}`, () =>
+              selectShaft(c.shaftId!),
+            ),
+          );
+        } else if (c.cause === 'noise' && c.emitterFacilityId !== undefined) {
+          const emitter = facilityById(state, c.emitterFacilityId);
+          panel.append(
+            jumpButton(`noise from the ${emitter?.kind ?? 'neighbor'} next door`, () =>
+              selectFacility(c.emitterFacilityId!),
+            ),
+          );
+        } else {
+          panel.insertAdjacentHTML('beforeend', kv('Complaint', c.cause));
+        }
       }
     }
-    if (f.kind === 'hotel') html += kv('Room', f.dirty ? 'dirty — needs housekeeping' : 'clean');
-    panel.innerHTML = html + `<div class="hint">Click empty space to deselect.</div>`;
+    panel.insertAdjacentHTML('beforeend', `<div class="hint">Click empty space to deselect.</div>`);
     return;
   }
 
@@ -228,11 +290,16 @@ function renderPanel(): void {
       queued += shaft.queueUp[f].length + shaft.queueDown[f].length;
     }
     const riding = shaft.cars.reduce((n, c) => n + c.passengers.length, 0);
+    const avgWait =
+      shaft.boardedToday > 0
+        ? `${(shaft.waitTicksToday / shaft.boardedToday / TICKS_PER_SECOND).toFixed(0)}s over ${shaft.boardedToday} riders`
+        : '—';
     panel.innerHTML =
       `<h3>Shaft #${shaft.id}${shaft.service ? ' (service)' : ''}</h3>` +
       kv('Cars', String(shaft.cars.length)) +
       kv('Riding', String(riding)) +
       kv('Queued', String(queued)) +
+      kv('Avg wait today', avgWait) +
       kv('Serves', `floors ${shaft.lowFloor}–${shaft.highFloor}`);
     const addCar = document.createElement('button');
     addCar.textContent = '+ car';

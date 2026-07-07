@@ -2,6 +2,7 @@ import { departTenants, spawnTenants } from './agents';
 import { CATALOG, tracksSatisfaction } from './catalog';
 import { tickOfDay } from './clock';
 import {
+  NOISE_RADIUS_TILES,
   RELET_DAYS,
   SAT_DAILY_ALPHA,
   SAT_INITIAL,
@@ -123,19 +124,25 @@ export function updateStar(state: SimState): number {
   return pop;
 }
 
-/** The Inspector's raison d'être (GDD §5): a unit's dominant complaint with
- *  its cause pinned to a place and time of day. Derived from tenants' stress
- *  bookkeeping; null when the tenants have nothing to grumble about. */
+/** The Inspector's raison d'être (GDD §5): a unit's complaints, ranked by
+ *  how much stress each cause inflicted today, every one pinned to a place —
+ *  a shaft for waits, the loudest adjacent emitter for noise — so the UI can
+ *  deep-link straight to the culprit. Empty when the tenants have nothing to
+ *  grumble about (less than a stress point per cause). */
 export interface UnitComplaint {
   cause: 'elevator waits' | 'noise' | 'stair climbs';
+  /** Today's total stress points this cause inflicted on the unit's tenants. */
+  magnitude: number;
   /** Worst single wait backing an elevator complaint. */
   waitSec?: number;
   shaftId?: number;
   floor?: number;
   bucket?: 'mornings' | 'midday' | 'evenings';
+  /** Noise complaints: the loudest emitter in range (deep-link target). */
+  emitterFacilityId?: number;
 }
 
-export function unitComplaint(state: SimState, facilityId: number): UnitComplaint | null {
+export function unitComplaints(state: SimState, facilityId: number): UnitComplaint[] {
   let wait = 0;
   let noise = 0;
   let climb = 0;
@@ -154,19 +161,50 @@ export function unitComplaint(state: SimState, facilityId: number): UnitComplain
       worst = { ticks: a.waitTicks, shaftId: a.shaftId, floor: a.floor, tod: tickOfDay(state.tick) };
     }
   }
-  const top = Math.max(wait, noise, climb);
-  if (top < 1) return null; // less than a stress point between them: no complaint
-  if (top === wait && worst) {
+
+  const out: UnitComplaint[] = [];
+  if (wait >= 1 && worst) {
     const h = worst.tod / TICKS_PER_HOUR;
-    return {
+    out.push({
       cause: 'elevator waits',
+      magnitude: wait,
       waitSec: Math.round(worst.ticks * 0.6), // 1 tick = 0.6 sim-seconds
       shaftId: worst.shaftId,
       floor: worst.floor,
       bucket: h < 11 ? 'mornings' : h < 15 ? 'midday' : 'evenings',
-    };
+    });
   }
-  if (top === noise) return { cause: 'noise' };
-  if (top === climb && climb > 0) return { cause: 'stair climbs' };
-  return null; // wait-dominant but no locatable evidence yet
+  if (noise >= 1) {
+    out.push({ cause: 'noise', magnitude: noise, emitterFacilityId: loudestEmitterNear(state, facilityId) });
+  }
+  if (climb >= 1) {
+    out.push({ cause: 'stair climbs', magnitude: climb });
+  }
+  out.sort((a, b) => b.magnitude - a.magnitude);
+  return out;
+}
+
+/** Dominant complaint, if any (convenience over unitComplaints). */
+export function unitComplaint(state: SimState, facilityId: number): UnitComplaint | null {
+  return unitComplaints(state, facilityId)[0] ?? null;
+}
+
+/** The loudest noise emitter within the adjacency radius of a unit —
+ *  mirrors recomputeNoise's rule (±1 floor, small horizontal gap). */
+function loudestEmitterNear(state: SimState, facilityId: number): number | undefined {
+  const f = state.facilities.find((x) => x.id === facilityId);
+  if (!f) return undefined;
+  let best: number | undefined;
+  let bestNoise = 0;
+  for (const e of state.facilities) {
+    const emitted = CATALOG[e.kind].noise;
+    if (emitted <= bestNoise || Math.abs(e.floor - f.floor) > 1) continue;
+    const gap =
+      e.x >= f.x + f.width ? e.x - (f.x + f.width) : f.x >= e.x + e.width ? f.x - (e.x + e.width) : 0;
+    if (gap <= NOISE_RADIUS_TILES) {
+      best = e.id;
+      bestNoise = emitted;
+    }
+  }
+  return best;
 }

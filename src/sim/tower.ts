@@ -64,6 +64,8 @@ export function buildScenario(opts: ScenarioOptions): SimState {
       service: false,
       builtTick: 0,
       cost: 0,
+      boardedToday: 0,
+      waitTicksToday: 0,
       queueUp,
       queueDown,
     });

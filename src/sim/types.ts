@@ -123,6 +123,10 @@ export interface ElevatorShaft {
   service: boolean;
   builtTick: number; // when placed; drives the demolish-refund window (GDD §9)
   cost: number; // what was actually paid (0 for scenario-built)
+  /** Per-shaft diagnostics (GDD §7), reset at midnight: what complaint
+   *  deep-links land on. */
+  boardedToday: number;
+  waitTicksToday: number;
   /** FIFO queues of agentIds waiting on each floor, by direction. Keys are floor numbers. */
   queueUp: Record<number, number[]>;
   queueDown: Record<number, number[]>;

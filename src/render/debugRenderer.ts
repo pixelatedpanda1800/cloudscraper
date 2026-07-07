@@ -211,10 +211,46 @@ export function render(
     ctx.fillRect(tx(a.x), y, 3, 5);
   }
 
-  // Selected agent: ring highlight (even while riding — follows the car)
+  // Selected agent: route overlay + ring highlight (follows the car while riding)
   if (sel.agentId !== null) {
     const a = state.agents[sel.agentId];
     if (a.activity !== 'offsite') {
+      // Route: current leg solid, remainder dashed — mirrors the panel's
+      // "trip" line so a commute can be read off the tower directly.
+      if (a.activity !== 'settled') {
+        const yOf = (f: number) => floorY(f) + FLOOR_H - 5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(tx(a.x) + 1.5, yOf(a.floor));
+        if (a.floor === a.destFloor) {
+          ctx.lineTo(tx(a.targetX), yOf(a.floor));
+          ctx.stroke();
+        } else if (a.legVia !== 'none') {
+          const viaX =
+            a.legVia === 'shaft'
+              ? state.shafts.find((s) => s.id === a.legViaId)?.x
+              : state.stairs.find((s) => s.id === a.legViaId)?.x;
+          if (viaX !== undefined) {
+            ctx.lineTo(tx(viaX), yOf(a.floor));
+            ctx.lineTo(tx(viaX), yOf(a.legFloor));
+            ctx.stroke();
+            if (a.legFloor !== a.destFloor || a.targetX !== viaX) {
+              ctx.setLineDash([3, 4]);
+              ctx.beginPath();
+              ctx.moveTo(tx(viaX), yOf(a.legFloor));
+              if (a.legFloor !== a.destFloor) ctx.lineTo(tx(viaX), yOf(a.destFloor));
+              ctx.lineTo(tx(a.targetX), yOf(a.destFloor));
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
+          } else {
+            ctx.stroke();
+          }
+        } else {
+          ctx.stroke();
+        }
+      }
       const y = floorY(a.floor) + FLOOR_H - 5;
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
