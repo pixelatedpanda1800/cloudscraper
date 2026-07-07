@@ -1,13 +1,23 @@
 import { tickAgent } from './agents';
-import { tickOfDay } from './clock';
+import { dayOf, tickOfDay } from './clock';
+import { DAYS_PER_QUARTER } from './constants';
+import {
+  collectDailySales,
+  collectQuarterRent,
+  reletVacancies,
+  updateDailySatisfaction,
+  updateStar,
+} from './economy';
 import { tickShaft } from './elevator';
 import { applyAction } from './actions';
 import type { LoggedAction } from './actions';
 import type { SimState } from './types';
 
-export { buildScenario } from './tower';
+export { buildScenario, facilityById } from './tower';
 export { hashState } from './hash';
 export { clockOf } from './clock';
+export { unitComplaint, updateStar } from './economy';
+export type { UnitComplaint } from './economy';
 export { applyAction };
 export type { Action, LoggedAction } from './actions';
 export type { SimState, Agent, ElevatorShaft } from './types';
@@ -21,10 +31,23 @@ export function tick(state: SimState): void {
     state.stats.boardedToday = 0;
     state.stats.totalWaitTicksToday = 0;
     state.stats.maxQueueToday = 0;
+    // Midnight economy events, in a fixed order (determinism): satisfaction
+    // digests the day's stress before quarterly consequences read it; sales
+    // close; vacancies re-let; the star gate re-checks population. Quarter
+    // boundary rent (GDD §8): day 0's midnight predates the 06:00 sim start,
+    // so the first collection is day DAYS_PER_QUARTER.
+    updateDailySatisfaction(state);
+    collectDailySales(state);
+    if (dayOf(state.tick) % DAYS_PER_QUARTER === 0) collectQuarterRent(state);
+    reletVacancies(state);
+    updateStar(state);
   }
 
+  const tod = tickOfDay(state.tick);
+  const day = dayOf(state.tick);
+  const workday = day % 7 < 5;
   for (let i = 0; i < state.agents.length; i++) {
-    tickAgent(state, state.agents[i]);
+    tickAgent(state, state.agents[i], tod, day, workday);
   }
   for (let i = 0; i < state.shafts.length; i++) {
     tickShaft(state, state.shafts[i]);

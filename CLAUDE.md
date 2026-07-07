@@ -17,7 +17,7 @@ A web-based spiritual successor to SimTower (working title CloudScraper; folder 
 
 ## Layout
 
-- `src/sim/` — engine: `sim.ts` (tick/run/runWithLog, public API), `agents.ts` (schedules, movement, stress), `elevator.ts` (SCAN control, multi-car shafts, boarding), `actions.ts`, `tower.ts` (scenario builder), `hash.ts` (FNV state hash for replay checks), `clock.ts`, `rng.ts`, `constants.ts`, `types.ts`
+- `src/sim/` — engine: `sim.ts` (tick/run/runWithLog, public API), `agents.ts` (schedules, movement, stress, route planning), `elevator.ts` (SCAN control, multi-car shafts, boarding), `actions.ts`, `tower.ts` (scenario builder), `catalog.ts` (per-facility data: cost, width, staffing, income), `economy.ts` (clock-driven income events), `hash.ts` (FNV state hash for replay checks), `clock.ts`, `rng.ts`, `constants.ts`, `types.ts`
 - `src/render/debugRenderer.ts` — Canvas2D debug view + hit-testing; `src/main.ts` — harness, HUD, inspector panel
 - `tests/` — Vitest; `scripts/bench.ts` — perf check (~120k ticks/sec on 1,008 agents; keep ≥100k)
 
@@ -27,7 +27,7 @@ A web-based spiritual successor to SimTower (working title CloudScraper; folder 
 
 ## Conventions
 
-TypeScript strict; no classes in sim state (plain data + functions); tune gameplay numbers in `constants.ts` with a comment giving the sim-time meaning; every new mechanic gets a determinism-safe test; commit messages describe player-visible behavior, not just code.
+TypeScript strict; no classes in sim state (plain data + functions); per-facility gameplay numbers live in the `catalog.ts` table, economy-wide and timing tunables in `constants.ts` — either way with a comment giving the sim-time/gameplay meaning; every new mechanic gets a determinism-safe test; commit messages describe player-visible behavior, not just code.
 
 ## Design guardrails from the GDD
 

@@ -4,6 +4,7 @@ import {
   ELEVATOR_CAPACITY,
   ELEVATOR_SPEED,
 } from './constants';
+import { tickOfDay } from './clock';
 import type { Agent, ElevatorCar, ElevatorShaft, SimState } from './types';
 
 /** Classic collective control (SCAN) per car; cars in a shaft share the hall
@@ -59,7 +60,7 @@ function openDoorsAt(state: SimState, shaft: ElevatorShaft, car: ElevatorCar, fl
   car.pos = floor;
   car.state = 'doors';
 
-  // Alight
+  // Alight: this leg is done; the walking logic plans the next one (if any).
   let moved = 0;
   const remaining: typeof car.passengers = [];
   for (const p of car.passengers) {
@@ -69,6 +70,9 @@ function openDoorsAt(state: SimState, shaft: ElevatorShaft, car: ElevatorCar, fl
       agent.floor = floor;
       agent.x = shaft.x;
       agent.shaftId = -1;
+      agent.legVia = 'none';
+      agent.legViaId = -1;
+      agent.legFloor = -1;
       moved++;
     } else {
       remaining.push(p);
@@ -91,10 +95,19 @@ function openDoorsAt(state: SimState, shaft: ElevatorShaft, car: ElevatorCar, fl
     while (queue.length > 0 && car.passengers.length < ELEVATOR_CAPACITY) {
       const agentId = queue.shift()!;
       const agent = state.agents[agentId];
-      car.passengers.push({ agentId, dest: agent.destFloor });
+      // Ride to the current leg's floor — with transfers this may not be the
+      // trip's final destination.
+      car.passengers.push({ agentId, dest: agent.legFloor });
       agent.activity = 'riding';
       state.stats.boardedToday++;
       state.stats.totalWaitTicksToday += agent.waitTicks;
+      // Complaint evidence (GDD §5): remember the worst wait — where and when.
+      if (agent.waitTicks > agent.worstWaitTicks) {
+        agent.worstWaitTicks = agent.waitTicks;
+        agent.worstWaitShaftId = shaft.id;
+        agent.worstWaitFloor = floor;
+        agent.worstWaitTod = tickOfDay(state.tick);
+      }
       agent.waitTicks = 0;
       moved++;
     }
@@ -155,27 +168,13 @@ export function tickShaft(state: SimState, shaft: ElevatorShaft): void {
   }
 }
 
-/** Agent joins the best shaft's queue for a trip from `from` to `dest`.
- *  Deterministic choice: serves both floors → shortest queue → lowest shaft id. */
-export function enqueueAgent(state: SimState, agent: Agent, from: number, dest: number): void {
-  const dir: -1 | 1 = dest > from ? 1 : -1;
-  let best: ElevatorShaft | null = null;
-  let bestLen = Infinity;
-  for (const shaft of state.shafts) {
-    if (from < shaft.lowFloor || from > shaft.highFloor) continue;
-    if (dest < shaft.lowFloor || dest > shaft.highFloor) continue;
-    const q = dir === 1 ? shaft.queueUp[from] : shaft.queueDown[from];
-    const len = q.length;
-    if (len < bestLen) {
-      bestLen = len;
-      best = shaft;
-    }
-  }
-  if (!best) return; // unreachable in M0 scenarios
-  const q = dir === 1 ? best.queueUp[from] : best.queueDown[from];
+/** Agent joins `shaft`'s hall queue on their current floor, riding toward the
+ *  current leg's floor. The shaft was already chosen by planNextLeg. */
+export function enqueueAgent(state: SimState, agent: Agent, shaft: ElevatorShaft): void {
+  const dir: -1 | 1 = agent.legFloor > agent.floor ? 1 : -1;
+  const q = dir === 1 ? shaft.queueUp[agent.floor] : shaft.queueDown[agent.floor];
   q.push(agent.id);
   agent.activity = 'queuing';
-  agent.shaftId = best.id;
-  agent.destFloor = dest;
+  agent.shaftId = shaft.id;
   if (q.length > state.stats.maxQueueToday) state.stats.maxQueueToday = q.length;
 }

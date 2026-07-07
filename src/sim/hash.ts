@@ -20,6 +20,23 @@ export function hashState(state: SimState): number {
 
   mix(state.tick);
   mix(state.rng.s);
+  mix(state.cash);
+  mix(state.star);
+  mix(state.facilities.length);
+  for (const f of state.facilities) {
+    mix(f.id);
+    mix(f.kind.length); // cheap enum discriminator
+    mix(f.floor);
+    mix(f.x);
+    mix(f.width);
+    mix(f.sold ? 1 : 0);
+    mix(f.noise);
+    mix(f.satisfaction);
+    mix(f.lowSatQuarters);
+    mix(f.vacant ? 1 : 0);
+    mix(f.dirty ? 1 : 0);
+    mix(f.assignedTo);
+  }
   for (const a of state.agents) {
     mix(a.x);
     mix(a.floor);
@@ -27,13 +44,25 @@ export function hashState(state: SimState): number {
     mix(a.waitTicks);
     mix(a.destFloor);
     mix(a.shaftId);
+    mix(a.homeFacilityId);
+    mix(a.legViaId);
+    mix(a.legFloor);
+    mix(a.climbTicksLeft);
+    mix(a.visitFacilityId);
     mix(a.activity.length); // cheap enum discriminator
     mix(a.intent.length);
+  }
+  mix(state.stairs.length);
+  for (const st of state.stairs) {
+    mix(st.id);
+    mix(st.floorLow);
+    mix(st.x);
   }
   mix(state.shafts.length);
   for (const s of state.shafts) {
     mix(s.id);
     mix(s.x);
+    mix(s.service ? 1 : 0);
     mix(s.cars.length);
     for (const car of s.cars) {
       mix(car.pos);
