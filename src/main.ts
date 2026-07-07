@@ -1,5 +1,7 @@
 import { applyAction, buildScenario, facilityById, tick, unitComplaints } from './sim/sim';
 import type { Action, LoggedAction } from './sim/sim';
+import { dayOf } from './sim/clock';
+import { loadNewest, saveLocal } from './persist';
 import { CATALOG, tracksSatisfaction } from './sim/catalog';
 import {
   LOT_WIDTH,
@@ -27,7 +29,7 @@ import {
  *  All build edits go through applyAction and are recorded in actionLog —
  *  the same snapshot+log model the server saves will use (GDD §12). */
 
-const state = buildScenario({
+let state = buildScenario({
   seed: 20260706,
   officeFloors: 14,
   shafts: 6,
@@ -113,6 +115,51 @@ function refreshBuildLocks(): void {
   }
 }
 refreshBuildLocks();
+
+// ---------- Save / load (GDD §9: autosave every sim-day + on close) ----------
+const saveInfo = document.createElement('span');
+saveInfo.className = 'hint';
+
+function applySave(file: NonNullable<Awaited<ReturnType<typeof loadNewest>>>): void {
+  state = file.state;
+  actionLog.length = 0;
+  actionLog.push(...file.actionLog);
+  lastDay = dayOf(state.tick);
+  sel.agentId = null;
+  sel.shaftId = null;
+  sel.facilityId = null;
+  sizeCanvas(canvas, state);
+  refreshBuildLocks();
+  renderPanel();
+}
+
+const saveBtn = document.createElement('button');
+saveBtn.textContent = 'Save';
+saveBtn.onclick = () => {
+  saveLocal('manual', state, actionLog)
+    .then(() => { saveInfo.textContent = ' saved'; })
+    .catch(() => { saveInfo.textContent = ' save failed'; });
+};
+const loadBtn = document.createElement('button');
+loadBtn.textContent = 'Load';
+loadBtn.onclick = () => {
+  loadNewest(['manual', 'autosave', 'exit'])
+    .then((file) => {
+      if (file) {
+        applySave(file);
+        saveInfo.textContent = ` loaded (day ${dayOf(file.state.tick) + 1})`;
+      } else {
+        saveInfo.textContent = ' no save found';
+      }
+    })
+    .catch(() => { saveInfo.textContent = ' load failed'; });
+};
+hud.append(saveBtn, loadBtn, saveInfo);
+
+let lastDay = dayOf(state.tick);
+window.addEventListener('beforeunload', () => {
+  void saveLocal('exit', state, actionLog); // best effort on close
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); pauseBtn.click(); }
@@ -361,6 +408,14 @@ function frame(now: number) {
       tick(state);
       acc -= MS_PER_TICK;
       steps++;
+    }
+    // Autosave once per sim-day, right after midnight ticks over.
+    const d = dayOf(state.tick);
+    if (d !== lastDay) {
+      lastDay = d;
+      saveLocal('autosave', state, actionLog)
+        .then(() => { saveInfo.textContent = ` autosaved day ${d}`; })
+        .catch(() => { saveInfo.textContent = ' autosave failed'; });
     }
   }
   render(ctx, state, sel);
